@@ -28,9 +28,19 @@ class ServerSnitch():
             print("Error while connecting to the wifi network {}".format(e))
             return False
         
-    def loop(self):
+    def loop_lora():
+        print("Not implemented")
+    
+    def loop_wifi():
+        # TODO: implement socket and stablish connection to server
+        return
+        
+    def loop(self, connection="LoRa"):
         #TODO: Make the main program here.
-        pass
+        if connection == "LoRa":
+            loop_lora()
+        else:
+            loop_wifi()
 
     def run(self):
         if self.set_up_lora():
@@ -38,7 +48,7 @@ class ServerSnitch():
             pass
         elif self.set_up_wifi():
             print('WiFi connection succeeded!')
-            self.loop()
+            self.loop(connection="WiFi")
         else:
             print("No module LoRa or WiFi could be loaded")
             pass
