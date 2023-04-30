@@ -6,17 +6,29 @@ import binascii
 WIFI_SSID = "ServerSnitchConnection"
 WIFI_PWD = "FHJDASK78#SDd"
 
+
+class Option:
+    SEND_TO_DEVICE = 1
+    SEND_TO_API = 2
+    CHECK_INTERNET_CONNECTION = 3
+
 class ServerSnitch():
 
     def __init__(self):
         self.wlan = WLAN(mode=WLAN.STA)
         self.wlan.antenna(WLAN.EXT_ANT)
         self.lora = LoRa()
+        self.uart = None
+        self.__init_uart__()
+        self.eui = binascii.hexlify(LoRa().mac()).decode('ascii')
 
-    def set_up_lora(self):
+    def __init_uart__(self):
+        self.uart = machine.UART(0, baudrate=115200)
+
+    def try_lora(self):
         return False
 
-    def set_up_wifi(self):
+    def try_wifi(self):
         try:
             
             nets = self.wlan.scan()
@@ -30,10 +42,10 @@ class ServerSnitch():
             print("Error while connecting to the wifi network {}".format(e))
             return False
         
-    def loop_lora():
+    def loop_lora(self):
         print("Not implemented")
     
-    def loop_wifi():
+    def loop_wifi(self):
         # TODO: implement socket and stablish connection to server
         return
         
@@ -44,34 +56,45 @@ class ServerSnitch():
         else:
             loop_wifi()
 
-    def establish_first_connection():
+    def check_server_internet(self):
+        message = self.send_command(Option.CHECK_INTERNET_CONNECTION)
+        loop = True
+        wan = lan = False
+        while loop:
+            if self.uart.any():
+                message = self.uart.readline()
+                if "serverconnection" in message:
+                    message = message.decode("ascii")
+                    wan = message.split("!")[1]
+                    lan = message.split("!")[2]
+                    loop = False
 
+        return bool(wan), bool(lan)
+
+    def send_command(self, command):
+        message = "configsnitch!{}!{}".format(command, self.eui)
+        self.uart.write(message.encode())
+
+    def get_data(self):
         pass
 
     def run(self):
-        # if self.set_up_lora():
-        #     #TODO: Call the starter loop
-        #     pass
-        # elif self.set_up_wifi():
-        #     print('WiFi connection succeeded!')
-        #     self.loop(connection="WiFi")
-        # else:
-        #     print("No module LoRa or WiFi could be loaded")
-        #     pass
-        try:
-            uart = machine.UART(0, baudrate=115200)
-            eui = binascii.hexlify(LoRa().mac()).decode('ascii')
-            message = "configsnitch!4!"+eui
-            uart.write(message.encode())
-            
-            while True:
-                if uart.any():
-                    read = uart.readline().decode('utf8')
-                    uart.write(read+" returned")
+        while True:
+            try:
+                wan, lan = self.check_server_internet()
 
-                time.sleep(1)
-        except Exception as e:
-            print(e)
+                if wan == True:
+                    self.send_command(Option.SEND_TO_API)
+                else:
+                    self.send_command(Option.SEND_TO_DEVICE)
+                    data = self.get_data()
+                    success = self.try_wifi(data)
+                    if not success:
+                        self.try_lora(data)
+
+                time.sleep(10)
+            except Exception as e:
+                print(e)
 
 
 def main(argv=None):
