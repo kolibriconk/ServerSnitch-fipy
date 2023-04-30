@@ -1,5 +1,7 @@
-from network import WLAN
+from network import WLAN, LoRa
 import machine
+import time
+import binascii
 
 WIFI_SSID = "ServerSnitchConnection"
 WIFI_PWD = "FHJDASK78#SDd"
@@ -7,16 +9,16 @@ WIFI_PWD = "FHJDASK78#SDd"
 class ServerSnitch():
 
     def __init__(self):
-        self.wlan = None
-        self.lora = None
+        self.wlan = WLAN(mode=WLAN.STA)
+        self.wlan.antenna(WLAN.EXT_ANT)
+        self.lora = LoRa()
 
     def set_up_lora(self):
         return False
 
     def set_up_wifi(self):
         try:
-            self.wlan = WLAN(mode=WLAN.STA)
-            self.wlan.antenna(WLAN.EXT_ANT)
+            
             nets = self.wlan.scan()
             for net in nets:
                 if net.ssid == WIFI_SSID:
@@ -42,17 +44,40 @@ class ServerSnitch():
         else:
             loop_wifi()
 
+    def establish_first_connection():
+
+        pass
+
     def run(self):
-        if self.set_up_lora():
-            #TODO: Call the starter loop
-            pass
-        elif self.set_up_wifi():
-            print('WiFi connection succeeded!')
-            self.loop(connection="WiFi")
-        else:
-            print("No module LoRa or WiFi could be loaded")
-            pass
+        # if self.set_up_lora():
+        #     #TODO: Call the starter loop
+        #     pass
+        # elif self.set_up_wifi():
+        #     print('WiFi connection succeeded!')
+        #     self.loop(connection="WiFi")
+        # else:
+        #     print("No module LoRa or WiFi could be loaded")
+        #     pass
+        try:
+            uart = machine.UART(0, baudrate=115200)
+            eui = binascii.hexlify(LoRa().mac()).decode('ascii')
+            message = "configsnitch!4!"+eui
+            uart.write(message.encode())
+            
+            while True:
+                if uart.any():
+                    read = uart.readline().decode('utf8')
+                    uart.write(read+" returned")
+
+                time.sleep(1)
+        except Exception as e:
+            print(e)
 
 
-app = ServerSnitch()
-app.run()
+def main(argv=None):
+    app = ServerSnitch()
+    app.run()
+
+
+if __name__ == "__main__":
+    main()
