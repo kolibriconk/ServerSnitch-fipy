@@ -12,6 +12,10 @@ class Option:
     SEND_TO_API = 2
     CHECK_INTERNET_CONNECTION = 3
 
+class Actions:
+    START_SYSTEM = 1
+    RESTART_SYSTEM = 2
+
 class ServerSnitch():
 
     def __init__(self):
@@ -21,6 +25,11 @@ class ServerSnitch():
         self.uart = None
         self.__init_uart__()
         self.eui = binascii.hexlify(LoRa().mac()).decode('ascii')
+        pin = machine.Pin('P11', mode=machine.Pin.OUT)
+        pin.value(0)
+        pin = machine.Pin('P12', mode=machine.Pin.OUT)
+        pin.value(0)
+
 
     def __init_uart__(self):
         self.uart = machine.UART(0, baudrate=115200)
@@ -58,16 +67,19 @@ class ServerSnitch():
 
     def check_server_internet(self):
         message = self.send_command(Option.CHECK_INTERNET_CONNECTION)
-        loop = True
+        loop = 1
         wan = lan = False
-        while loop:
+        while loop < 10:
+            print(loop)
             if self.uart.any():
                 message = self.uart.readline()
                 if "serverconnection" in message:
                     message = message.decode("ascii")
                     wan = message.split("!")[1]
                     lan = message.split("!")[2]
-                    loop = False
+                    loop = 10
+            time.sleep(2)
+            loop = loop+1
 
         return bool(wan), bool(lan)
 
@@ -77,6 +89,22 @@ class ServerSnitch():
 
     def get_data(self):
         pass
+
+    def ask_for_action(self):
+        # TODO: get pybytes to check if an action is requested via IoT
+        return Actions.START_SYSTEM
+    
+    def perform_action(self, action):
+        if action is not None:
+            if action == Actions.RESTART_SYSTEM:
+                pin = machine.Pin('P11', mode=machine.Pin.OUT)
+            elif action == Actions.START_SYSTEM:
+                pin = machine.Pin('P8', mode=machine.Pin.OUT)
+
+            pin.value(1)
+            time.sleep(1)
+            pin.value(0)
+
 
     def run(self):
         while True:
@@ -91,10 +119,13 @@ class ServerSnitch():
                     success = self.try_wifi(data)
                     if not success:
                         self.try_lora(data)
-
-                time.sleep(10)
             except Exception as e:
                 print(e)
+            
+            action = self.ask_for_action()
+            self.perform_action(action)
+
+            time.sleep(10)
 
 
 def main(argv=None):
