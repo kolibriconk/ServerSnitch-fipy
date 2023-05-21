@@ -34,41 +34,49 @@ class ServerSnitch():
     def __init_uart__(self):
         self.uart = machine.UART(0, baudrate=115200)
 
-    def try_lora(self):
+    def try_lora(self, wan, lan, data):
         return False
 
-    def try_wifi(self):
+    def try_wifi(self, wan, lan, data):
         try:
-            
             nets = self.wlan.scan()
-            for net in nets:
-                if net.ssid == WIFI_SSID:
-                    self.wlan.connect(net.ssid, auth=(net.sec, WIFI_PWD), timeout=10000)
-                    while not self.wlan.isconnected():
-                        machine.idle() # save power while waiting
-                    return True
+            success = False
+            if not self.wlan.isconnected():
+                for net in nets:
+                    print(net.ssid)
+                    if net.ssid == WIFI_SSID:
+                        self.wlan.connect(net.ssid, auth=(net.sec, WIFI_PWD), timeout=10000)
+                        tries = 0
+                        
+                        while tries < 100:
+                            tries = tries + 1
+                            time.sleep(2)
+                        
+                        if self.wlan.isconnected():
+                            success = True
+                        break
+            else:
+                success = True
+
+            print("JRAMOS success_try_wifi=", success)
+            if success:
+                if isinstance(data, bool):
+                    message = "pcdown!{}".format(self.eui)
+                else:
+                    message = "pcup!{}!{}!{}!{}".format(self.eui, wan, lan, data)
+                
+                print("Message to be sent= ", message)
+                pybytes.send_signal(1, message)
+
+            return success
         except Exception as e:
             print("Error while connecting to the wifi network {}".format(e))
             return False
-        
-    def loop_lora(self):
-        print("Not implemented")
-    
-    def loop_wifi(self):
-        # TODO: implement socket and stablish connection to server
-        return
-        
-    def loop(self, connection="LoRa"):
-        #TODO: Make the main program here.
-        if connection == "LoRa":
-            loop_lora()
-        else:
-            loop_wifi()
 
     def check_server_internet(self):
         message = self.send_command(Option.CHECK_INTERNET_CONNECTION)
         loop = 1
-        wan = lan = False
+        wan = lan = pc_up = False
         while loop < 10:
             print(loop)
             if self.uart.any():
@@ -77,17 +85,18 @@ class ServerSnitch():
                     message = message.decode("ascii")
                     wan = message.split("!")[1]
                     lan = message.split("!")[2]
+                    pc_up = True
                     loop = 10
             time.sleep(2)
             loop = loop+1
 
-        return bool(wan), bool(lan)
+        return bool(wan), bool(lan), pc_up
 
     def send_command(self, command):
         message = "configsnitch!{}!{}".format(command, self.eui)
         self.uart.write(message.encode())
 
-    def get_data(self):
+    def get_critical_config(self):
         pass
 
     def ask_for_action(self):
@@ -109,16 +118,21 @@ class ServerSnitch():
     def run(self):
         while True:
             try:
-                wan, lan = self.check_server_internet()
-
-                if wan == True:
-                    self.send_command(Option.SEND_TO_API)
+                wan, lan, pc_up = self.check_server_internet()
+                print("JRAMOS pc_up=", pc_up)
+                if pc_up:
+                    if wan == True:
+                        self.send_command(Option.SEND_TO_API)
+                    else:
+                        self.send_command(Option.SEND_TO_DEVICE)
+                        data = self.get_critical_config()
+                        success = self.try_wifi(wan, lan, data)
+                        if not success:
+                            self.try_lora(wan, lan, data)
                 else:
-                    self.send_command(Option.SEND_TO_DEVICE)
-                    data = self.get_data()
-                    success = self.try_wifi(data)
+                    success = self.try_wifi(wan, lan, pc_up)
                     if not success:
-                        self.try_lora(data)
+                        self.try_lora(wan, lan, pc_up)
             except Exception as e:
                 print(e)
             
