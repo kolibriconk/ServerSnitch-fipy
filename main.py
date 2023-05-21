@@ -61,7 +61,10 @@ class ServerSnitch():
             print("JRAMOS success_try_wifi=", success)
             if success:
                 if isinstance(data, bool):
-                    message = "pcdown!{}".format(self.eui)
+                    if data:
+                        message = "pcup!{}".format(self.eui)
+                    else:
+                        message = "pcdown!{}".format(self.eui)
                 else:
                     message = "pcup!{}!{}!{}!{}".format(self.eui, wan, lan, data)
                 
@@ -74,7 +77,7 @@ class ServerSnitch():
             return False
 
     def check_server_internet(self):
-        message = self.send_command(Option.CHECK_INTERNET_CONNECTION)
+        self.send_command(Option.CHECK_INTERNET_CONNECTION)
         loop = 1
         wan = lan = pc_up = False
         while loop < 10:
@@ -97,7 +100,22 @@ class ServerSnitch():
         self.uart.write(message.encode())
 
     def get_critical_config(self):
-        pass
+        self.send_command(Option.SEND_TO_DEVICE)
+        message = ""
+        loop = 1
+        data = ""
+        while loop < 10:
+            if self.uart.any():
+                message = self.uart.readline()
+                if "criticalconfig" in message:
+                    message = message.decode("ascii")
+                    if message != "criticalconfig!none":
+                        data = message
+                    loop = 10
+            time.sleep(2)
+            loop = loop+1
+
+        return data
 
     def ask_for_action(self):
         # TODO: get pybytes to check if an action is requested via IoT
@@ -114,6 +132,10 @@ class ServerSnitch():
             time.sleep(1)
             pin.value(0)
 
+    def try_send(self, wan, lan, data):
+        success = self.try_wifi(wan, lan, data)
+        if not success:
+            self.try_lora(wan, lan, data)
 
     def run(self):
         while True:
@@ -121,18 +143,19 @@ class ServerSnitch():
                 wan, lan, pc_up = self.check_server_internet()
                 print("JRAMOS pc_up=", pc_up)
                 if pc_up:
-                    if wan == True:
+                    if wan:
                         self.send_command(Option.SEND_TO_API)
                     else:
-                        self.send_command(Option.SEND_TO_DEVICE)
                         data = self.get_critical_config()
-                        success = self.try_wifi(wan, lan, data)
-                        if not success:
-                            self.try_lora(wan, lan, data)
+                        if data != "":
+                            self.try_send(wan, lan, data)
+                        else:
+                            # PC UP but no critical data
+                            self.try_send(wan, lan, True)
                 else:
-                    success = self.try_wifi(wan, lan, pc_up)
-                    if not success:
-                        self.try_lora(wan, lan, pc_up)
+                    #PC DOWN
+                    self.try_send(wan, lan, False)
+
             except Exception as e:
                 print(e)
             
