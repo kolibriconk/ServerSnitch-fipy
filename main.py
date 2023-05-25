@@ -2,10 +2,16 @@ from network import WLAN, LoRa
 import machine
 import time
 import binascii
+import socket 
+import ubinascii
+import struct
+
 
 WIFI_SSID = "ServerSnitchConnection"
 WIFI_PWD = "FHJDASK78#SDd"
-
+APP_EUI = ubinascii.unhexlify('0000000000000000')
+APP_KEY = ubinascii.unhexlify('4FFC456E706BBE0370199A390B410C46')
+DEV_ADDR = struct.unpack(">l", ubinascii.unhexlify('260B9B65'))[0]
 
 class Option:
     SEND_TO_DEVICE = 1
@@ -20,8 +26,8 @@ class ServerSnitch():
 
     def __init__(self):
         self.wlan = WLAN(mode=WLAN.STA)
-        self.wlan.antenna(WLAN.EXT_ANT)
-        self.lora = LoRa()
+        self.wlan.antenna(WLAN.INT_ANT)
+        self.lora = LoRa(mode=LoRa.LORAWAN, region=LoRa.EU868)
         self.uart = None
         self.__init_uart__()
         self.eui = binascii.hexlify(LoRa().mac()).decode('ascii')
@@ -30,11 +36,41 @@ class ServerSnitch():
         pin = machine.Pin('P12', mode=machine.Pin.OUT)
         pin.value(0)
 
+        print("Trying to join lora")
+        self.lora.join(activation=LoRa.ABP, auth=(DEV_ADDR, APP_KEY, APP_KEY), timeout=0)
+
+        while not self.lora.has_joined():
+            time.sleep(2.5)
+            print('Not yet joined...')
+        print("Joined!")
+
+
 
     def __init_uart__(self):
         self.uart = machine.UART(0, baudrate=115200)
 
     def try_lora(self, wan, lan, data):
+        print("Trying lora")
+        # create a LoRa socket
+        s = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
+
+        # set the LoRaWAN data rate
+        s.setsockopt(socket.SOL_LORA, socket.SO_DR, 5)
+
+        # make the socket blocking
+        # (waits for the data to be sent and for the 2 receive windows to expire)
+        s.setblocking(True)
+
+        # send some data
+        s.send(bytes([wan, lan, data]))
+
+        # make the socket non-blocking
+        # (because if there's no data received it will block forever...)
+        s.setblocking(False)
+
+        # get any data received (if any...)
+        data = s.recv(64)
+        print(data)
         return False
 
     def try_wifi(self, wan, lan, data):
