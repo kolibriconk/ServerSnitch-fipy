@@ -8,7 +8,7 @@ import struct
 
 
 WIFI_SSID = "ServerSnitchConnection"
-WIFI_PWD = "FHJDASK78#SDd"
+WIFI_PWD = "FHJDASK78#SDd" # Correct
 APP_EUI = ubinascii.unhexlify('0000000000000000')
 APP_KEY = ubinascii.unhexlify('4FFC456E706BBE0370199A390B410C46')
 DEV_ADDR = struct.unpack(">l", ubinascii.unhexlify('260B9B65'))[0]
@@ -62,7 +62,10 @@ class ServerSnitch():
         s.setblocking(True)
 
         # send some data
-        s.send(bytes([wan, lan, data]))
+        print("to send")
+        message = bytes([wan, lan, data])
+        print(message)
+        s.send(message)
 
         # make the socket non-blocking
         # (because if there's no data received it will block forever...)
@@ -84,7 +87,8 @@ class ServerSnitch():
                         self.wlan.connect(net.ssid, auth=(net.sec, WIFI_PWD), timeout=10000)
                         tries = 0
                         
-                        while tries < 100:
+                        while tries < 10:
+                            print(tries)
                             tries = tries + 1
                             time.sleep(2)
                         
