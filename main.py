@@ -19,8 +19,8 @@ class Option:
     CHECK_INTERNET_CONNECTION = 3
 
 class Actions:
-    START_SYSTEM = 1
-    RESTART_SYSTEM = 2
+    START_SYSTEM = 0
+    RESTART_SYSTEM = 1
 
 class ServerSnitch():
 
@@ -74,7 +74,7 @@ class ServerSnitch():
         # get any data received (if any...)
         data = s.recv(64)
         print(data)
-        return False
+        return data
 
     def try_wifi(self, wan, lan, data):
         try:
@@ -126,8 +126,8 @@ class ServerSnitch():
                 message = self.uart.readline()
                 if "serverconnection" in message:
                     message = message.decode("ascii")
-                    wan = message.split("!")[1]
-                    lan = message.split("!")[2]
+                    wan = message.split("!")[1] == "True"
+                    lan = message.split("!")[2] == "True"
                     pc_up = True
                     loop = 10
             time.sleep(2)
@@ -162,20 +162,20 @@ class ServerSnitch():
         return Actions.START_SYSTEM
     
     def perform_action(self, action):
-        if action is not None:
-            if action == Actions.RESTART_SYSTEM:
-                pin = machine.Pin('P11', mode=machine.Pin.OUT)
-            elif action == Actions.START_SYSTEM:
-                pin = machine.Pin('P8', mode=machine.Pin.OUT)
+        if action == Actions.RESTART_SYSTEM:
+            pin = machine.Pin('P11', mode=machine.Pin.OUT)
+        elif action == Actions.START_SYSTEM:
+            pin = machine.Pin('P8', mode=machine.Pin.OUT)
 
-            pin.value(1)
-            time.sleep(1)
-            pin.value(0)
+        pin.value(1)
+        time.sleep(1)
+        pin.value(0)
 
     def try_send(self, wan, lan, data):
         success = self.try_wifi(wan, lan, data)
         if not success:
-            self.try_lora(wan, lan, data)
+            data = self.try_lora(wan, lan, data)
+        return data
 
     def run(self):
         while True:
@@ -188,19 +188,19 @@ class ServerSnitch():
                     else:
                         data = self.get_critical_config()
                         if data != "":
-                            self.try_send(wan, lan, data)
+                            down_data = self.try_send(wan, lan, data)
                         else:
                             # PC UP but no critical data
-                            self.try_send(wan, lan, True)
+                            down_data = self.try_send(wan, lan, True)
                 else:
                     #PC DOWN
-                    self.try_send(wan, lan, False)
+                    down_data = self.try_send(wan, lan, False)
 
             except Exception as e:
                 print(e)
             
-            action = self.ask_for_action()
-            self.perform_action(action)
+            if down_data != "":
+                self.perform_action(down_data)
 
             time.sleep(10)
 
