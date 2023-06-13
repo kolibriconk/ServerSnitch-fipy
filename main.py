@@ -19,8 +19,8 @@ class Option:
     CHECK_INTERNET_CONNECTION = 3
 
 class Actions:
-    START_SYSTEM = 0
-    RESTART_SYSTEM = 1
+    START_SYSTEM = 0x01
+    RESTART_SYSTEM = 0x02
 
 class ServerSnitch():
 
@@ -37,7 +37,7 @@ class ServerSnitch():
         pin.value(0)
 
         print("Trying to join lora")
-        self.lora.join(activation=LoRa.ABP, auth=(DEV_ADDR, APP_KEY, APP_KEY), timeout=0)
+        self.lora.join(activation=LoRa.ABP, auth=(DEV_ADDR, APP_KEY, APP_KEY))
 
         while not self.lora.has_joined():
             time.sleep(2.5)
@@ -51,29 +51,24 @@ class ServerSnitch():
 
     def try_lora(self, wan, lan, data):
         print("Trying lora")
-        # create a LoRa socket
+        data = self.send_message(bytes([wan, lan, data]))
+        return data
+    
+    def send_message(self, message):
+        print("Openning socket")
         s = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
-
         # set the LoRaWAN data rate
         s.setsockopt(socket.SOL_LORA, socket.SO_DR, 5)
-
         # make the socket blocking
         # (waits for the data to be sent and for the 2 receive windows to expire)
         s.setblocking(True)
-
         # send some data
-        print("to send")
-        message = bytes([wan, lan, data])
-        print(message)
         s.send(message)
-
         # make the socket non-blocking
         # (because if there's no data received it will block forever...)
         s.setblocking(False)
-
         # get any data received (if any...)
         data = s.recv(64)
-        print(data)
         return data
 
     def try_wifi(self, wan, lan, data):
@@ -159,17 +154,30 @@ class ServerSnitch():
 
     def ask_for_action(self):
         # TODO: get pybytes to check if an action is requested via IoT
-        return Actions.START_SYSTEM
+        action = self.send_message(bytes([0x01]))
+
+        print(action)
+
+        if action == '':
+            return False
+        
+        if action:
+            self.perform_action(action)
+
     
     def perform_action(self, action):
+        if isinstance(action, bytes):
+            action = action[0]
+        pin = None
         if action == Actions.RESTART_SYSTEM:
             pin = machine.Pin('P11', mode=machine.Pin.OUT)
         elif action == Actions.START_SYSTEM:
             pin = machine.Pin('P8', mode=machine.Pin.OUT)
 
-        pin.value(1)
-        time.sleep(1)
-        pin.value(0)
+        if pin is not None:
+            pin.value(1)
+            time.sleep(1)
+            pin.value(0)
 
     def try_send(self, wan, lan, data):
         success = self.try_wifi(wan, lan, data)
@@ -181,6 +189,7 @@ class ServerSnitch():
         while True:
             try:
                 wan, lan, pc_up = self.check_server_internet()
+                down_data = b""
                 print("JRAMOS pc_up=", pc_up)
                 if pc_up:
                     if wan:
@@ -199,10 +208,16 @@ class ServerSnitch():
             except Exception as e:
                 print(e)
             
-            if down_data != "":
+            if down_data != b"":
+                print(down_data)
                 self.perform_action(down_data)
+            else:
+                self.ask_for_action()
 
-            time.sleep(10)
+            self.ask_for_action()
+            # self.perform_action(bytes([0x01]))
+            # time.sleep(20)
+            # self.perform_action(bytes([0x02]))
 
 
 def main(argv=None):
