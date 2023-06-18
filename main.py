@@ -19,8 +19,8 @@ class Option:
     CHECK_INTERNET_CONNECTION = 3
 
 class Actions:
-    START_SYSTEM = 0x01
-    RESTART_SYSTEM = 0x02
+    START_SYSTEM = b"0x01"
+    RESTART_SYSTEM = b"0x00"
 
 class ServerSnitch():
 
@@ -153,7 +153,6 @@ class ServerSnitch():
         return data
 
     def ask_for_action(self):
-        # TODO: get pybytes to check if an action is requested via IoT
         action = self.send_message(bytes([0x01]))
 
         print(action)
