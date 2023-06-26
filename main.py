@@ -77,13 +77,13 @@ class ServerSnitch():
             success = False
             if not self.wlan.isconnected():
                 for net in nets:
-                    print(net.ssid)
+                    # print(net.ssid)
                     if net.ssid == WIFI_SSID:
                         self.wlan.connect(net.ssid, auth=(net.sec, WIFI_PWD), timeout=10000)
                         tries = 0
                         
                         while tries < 10:
-                            print(tries)
+                            # print(tries)
                             tries = tries + 1
                             time.sleep(2)
                         
@@ -93,7 +93,7 @@ class ServerSnitch():
             else:
                 success = True
 
-            print("JRAMOS success_try_wifi=", success)
+            # print("JRAMOS success_try_wifi=", success)
             if success:
                 if isinstance(data, bool):
                     if data:
@@ -103,12 +103,12 @@ class ServerSnitch():
                 else:
                     message = "pcup!{}!{}!{}!{}".format(self.eui, wan, lan, data)
                 
-                print("Message to be sent= ", message)
+                # print("Message to be sent= ", message)
                 pybytes.send_signal(1, message)
 
             return success
         except Exception as e:
-            print("Error while connecting to the wifi network {}".format(e))
+            # print("Error while connecting to the wifi network {}".format(e))
             return False
 
     def check_server_internet(self):
@@ -116,7 +116,7 @@ class ServerSnitch():
         loop = 1
         wan = lan = pc_up = False
         while loop < 10:
-            print(loop)
+            # print(loop)
             if self.uart.any():
                 message = self.uart.readline()
                 if "serverconnection" in message:
@@ -155,7 +155,7 @@ class ServerSnitch():
     def ask_for_action(self):
         action = self.send_message(bytes([0x01]))
 
-        print(action)
+        # print(action)
 
         if action == '':
             return False
@@ -189,7 +189,7 @@ class ServerSnitch():
             try:
                 wan, lan, pc_up = self.check_server_internet()
                 down_data = b""
-                print("JRAMOS pc_up=", pc_up)
+                # print("JRAMOS pc_up=", pc_up)
                 if pc_up:
                     if wan:
                         self.send_command(Option.SEND_TO_API)
@@ -208,7 +208,7 @@ class ServerSnitch():
                 print(e)
             
             if down_data != b"":
-                print(down_data)
+                # print(down_data)
                 self.perform_action(down_data)
             else:
                 self.ask_for_action()
